@@ -1,0 +1,40 @@
+name: Tests
+
+on:
+  push:
+    branches: ["master"]
+    paths:
+      - '**.go'
+      - '**.mod'
+  pull_request:
+    paths:
+      - '**.go'
+      - '**.mod'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: "Lint"
+    if: "${{ !endsWith(github.actor, '[bot]') }}"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: projectdiscovery/actions/setup/go@v1
+      - uses: projectdiscovery/actions/golangci-lint/v2@v1
+
+  tests:
+    name: "Tests"
+    needs: ["lint"]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+    runs-on: "${{ matrix.os }}"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: projectdiscovery/actions/setup/go@v1
+      - run: go test -v -race .
