@@ -21,49 +21,49 @@ import (
 
 // FuncDoc represents documentation for a function.
 type FuncDoc struct {
-	Name string    `json:"name"`
-	Args []ArgInfo `json:"args"`
-	Doc  string    `json:"doc"`
+	Name string    `json:"name" jsonschema:"function name"`
+	Args []ArgInfo `json:"args" jsonschema:"function arguments"`
+	Doc  string    `json:"doc" jsonschema:"function documentation"`
 }
 
 // ValueDoc represents documentation for a constant or variable.
 type ValueDoc struct {
-	Names []string `json:"names"`
-	Doc   string   `json:"doc"`
+	Names []string `json:"names" jsonschema:"value identifiers"`
+	Doc   string   `json:"doc" jsonschema:"value documentation"`
 }
 
 // ArgInfo represents information about a function or method argument.
 type ArgInfo struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
+	Name string `json:"name" jsonschema:"argument name"`
+	Type string `json:"type" jsonschema:"argument type"`
 }
 
 // MethodDoc represents documentation for a method.
 type MethodDoc struct {
-	Recv string    `json:"recv"`
-	Name string    `json:"name"`
-	Args []ArgInfo `json:"args"`
-	Doc  string    `json:"doc"`
+	Recv string    `json:"recv" jsonschema:"receiver type name"`
+	Name string    `json:"name" jsonschema:"method name"`
+	Args []ArgInfo `json:"args" jsonschema:"method arguments"`
+	Doc  string    `json:"doc" jsonschema:"method documentation"`
 }
 
 // TypeDoc represents documentation for a type, including its methods.
 type TypeDoc struct {
-	Name    string      `json:"name"`
-	Doc     string      `json:"doc"`
-	Methods []MethodDoc `json:"methods"`
+	Name    string      `json:"name" jsonschema:"type name"`
+	Doc     string      `json:"doc" jsonschema:"type documentation"`
+	Methods []MethodDoc `json:"methods" jsonschema:"associated methods"`
 }
 
 // PackageDoc represents documentation for a Go package.
 type PackageDoc struct {
-	ImportPath string     `json:"import_path"`
-	Name       string     `json:"name"`
-	Synopsis   string     `json:"synopsis"`
-	DocText    string     `json:"doc"`
-	DocHTML    string     `json:"-"`
-	Consts     []ValueDoc `json:"consts"`
-	Vars       []ValueDoc `json:"vars"`
-	Funcs      []FuncDoc  `json:"funcs"`
-	Types      []TypeDoc  `json:"types"`
+	ImportPath string     `json:"import_path" jsonschema:"package import path"`
+	Name       string     `json:"name" jsonschema:"package name"`
+	Synopsis   string     `json:"synopsis" jsonschema:"package synopsis"`
+	DocText    string     `json:"doc" jsonschema:"package documentation text"`
+	DocHTML    string     `json:"-" jsonschema:"package documentation HTML"`
+	Consts     []ValueDoc `json:"consts" jsonschema:"package constants"`
+	Vars       []ValueDoc `json:"vars" jsonschema:"package variables"`
+	Funcs      []FuncDoc  `json:"funcs" jsonschema:"package functions"`
+	Types      []TypeDoc  `json:"types" jsonschema:"package types"`
 }
 
 // Text returns the plain text documentation for the package.
@@ -86,14 +86,14 @@ func (p PackageDoc) MarshalJSON() ([]byte, error) {
 // SymbolDoc represents documentation for a specific symbol (type, method,
 // function, const, or var).
 type SymbolDoc struct {
-	ImportPath string       `json:"import_path"`
-	Package    string       `json:"package"`
-	Kind       string       `json:"kind"`
-	Name       string       `json:"name"`
-	Receiver   string       `json:"receiver"`
-	Args       []ArgInfo    `json:"args"`
-	DocText    string       `json:"doc"`
-	DocHTML    string       `json:"-"`
+	ImportPath string       `json:"import_path" jsonschema:"package import path"`
+	Package    string       `json:"package" jsonschema:"package name"`
+	Kind       string       `json:"kind" jsonschema:"symbol kind"`
+	Name       string       `json:"name" jsonschema:"symbol name"`
+	Receiver   string       `json:"receiver" jsonschema:"receiver type name"`
+	Args       []ArgInfo    `json:"args" jsonschema:"symbol arguments"`
+	DocText    string       `json:"doc" jsonschema:"symbol documentation text"`
+	DocHTML    string       `json:"-" jsonschema:"symbol documentation HTML"`
 	docParsed  *comment.Doc // For lazy HTML generation
 }
 
