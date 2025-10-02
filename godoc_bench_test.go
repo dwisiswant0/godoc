@@ -84,6 +84,32 @@ func BenchmarkLoadAndMarshal(b *testing.B) {
 	}
 }
 
+func BenchmarkResultText(b *testing.B) {
+	g := godoc.New()
+
+	result, err := g.Load("fmt", "", "")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	for b.Loop() {
+		_ = result.Text()
+	}
+}
+
+func BenchmarkResultHTML(b *testing.B) {
+	g := godoc.New()
+
+	result, err := g.Load("fmt", "", "")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	for b.Loop() {
+		_ = result.HTML()
+	}
+}
+
 func BenchmarkConcurrentLoad(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		g := godoc.New()
