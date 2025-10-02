@@ -142,9 +142,7 @@ func New(opts ...Option) Godoc {
 		ctx:     context.Background(),
 	}
 
-	for _, opt := range opts {
-		opt(&g)
-	}
+	g.SetOptions(opts...)
 
 	if g.ctx == nil {
 		g.ctx = context.Background()

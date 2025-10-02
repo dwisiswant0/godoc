@@ -37,3 +37,12 @@ func WithContext(ctx context.Context) Option {
 		g.ctx = ctx
 	}
 }
+
+// SetOptions applies the given options to the [Godoc] instance.
+//
+// Note that applying options may override previously set values.
+func (g *Godoc) SetOptions(opts ...Option) {
+	for _, opt := range opts {
+		opt(g)
+	}
+}
