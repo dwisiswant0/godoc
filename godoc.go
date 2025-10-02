@@ -224,7 +224,7 @@ func (d *Godoc) getOrLoadPkg(importPath, version string) (PackageDoc, string, er
 		// stale entry or missing package payload; fall through to rebuild
 	}
 
-	pkgDoc, _, pkgPath, actualVersion, meta, err := d.buildDoc(importPath, version)
+	pkgDoc, _, pkgPath, actualVersion, meta, err := d.buildDoc(importPath, version, false)
 	if err != nil {
 		return PackageDoc{}, "", err
 	}
@@ -271,7 +271,7 @@ func (d *Godoc) getOrLoadSymbol(importPath, symbol, version string) (SymbolDoc, 
 		// stale entry or missing symbol payload; fall through to rebuild
 	}
 
-	_, symbols, pkgPath, actualVersion, meta, err := d.buildDoc(importPath, version)
+	_, symbols, pkgPath, actualVersion, meta, err := d.buildDoc(importPath, version, true)
 	if err != nil {
 		return SymbolDoc{}, "", err
 	}
@@ -300,13 +300,17 @@ func (d *Godoc) getOrLoadSymbol(importPath, symbol, version string) (SymbolDoc, 
 
 // buildDoc loads and builds documentation for the specified import path and
 // version.
-func (d *Godoc) buildDoc(importPath, version string) (PackageDoc, map[string]SymbolDoc, string, string, cacheMetadata, error) {
+func (d *Godoc) buildDoc(importPath, version string, needSymbols bool) (PackageDoc, map[string]SymbolDoc, string, string, cacheMetadata, error) {
+	var symbols, symbols2 map[string]SymbolDoc
+
 	trimmedVersion := strings.TrimSpace(version)
 
 	dpkg, fset, typesInfo, pkgPath, module, _, err := d.loadDocPkg(importPath, "")
 	if err == nil {
 		pkgDoc := toPkgDoc(dpkg, fset, typesInfo, pkgPath)
-		symbols := buildSymbolIndex(dpkg, fset, typesInfo, pkgPath)
+		if needSymbols {
+			symbols = buildSymbolIndex(dpkg, fset, typesInfo, pkgPath)
+		}
 		meta := deriveCacheMetadata(module, trimmedVersion)
 
 		if isRemoteImportPath(importPath) {
@@ -337,7 +341,9 @@ func (d *Godoc) buildDoc(importPath, version string) (PackageDoc, map[string]Sym
 	}
 
 	pkgDoc := toPkgDoc(dpkg2, fset2, typesInfo2, pkgPath2)
-	symbols := buildSymbolIndex(dpkg2, fset2, typesInfo2, pkgPath2)
+	if needSymbols {
+		symbols2 = buildSymbolIndex(dpkg2, fset2, typesInfo2, pkgPath2)
+	}
 
 	actualVersion := strings.TrimSpace(getVersionFromMod(modDir, importPath))
 	if actualVersion == "" {
@@ -355,7 +361,7 @@ func (d *Godoc) buildDoc(importPath, version string) (PackageDoc, map[string]Sym
 		}
 	}
 
-	return pkgDoc, symbols, pkgPath2, actualVersion, meta, nil
+	return pkgDoc, symbols2, pkgPath2, actualVersion, meta, nil
 }
 
 // loadDocPkg loads documentation for a Go package.
