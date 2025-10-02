@@ -495,9 +495,6 @@ func (d *Godoc) checkModuleDep(importPath, version string) (string, func(), erro
 		return "", nil, fmt.Errorf("go get %q failed: %w", target, err)
 	}
 
-	_ = d.runGo(tempDir, "mod", "download", "all")
-	// not fatal; some modules may not need download if go get already did it.
-
 	return tempDir, cleanup, nil
 }
 
@@ -604,43 +601,38 @@ func toPkgDoc(p *doc.Package, fset *token.FileSet, typesInfo *types.Info, import
 				Doc:  strings.TrimSpace(f.Doc),
 			})
 		}
-	}
 
-	for _, t := range p.Types {
-		td := TypeDoc{
-			Name:    t.Name,
-			Doc:     strings.TrimSpace(t.Doc),
-			Fields:  structFieldDocs(t, fset, typesInfo),
-			Methods: make([]MethodDoc, 0, len(t.Methods)),
-		}
-
+		methods := make([]MethodDoc, 0, len(t.Methods))
+		seen := make(map[string]struct{}, len(t.Methods))
 		for _, m := range t.Methods {
-			td.Methods = append(td.Methods, MethodDoc{
+			methods = append(methods, MethodDoc{
 				Recv: t.Name,
 				Name: m.Name,
 				Args: extractArgs(m.Decl, fset, typesInfo),
 				Doc:  strings.TrimSpace(m.Doc),
 			})
+			seen[m.Name] = struct{}{}
 		}
 
 		if extra := interfaceMethodDocs(t, typesInfo); len(extra) > 0 {
-			existing := make(map[string]struct{}, len(td.Methods))
-			for _, m := range td.Methods {
-				existing[m.Name] = struct{}{}
-			}
-
 			for _, m := range extra {
-				if _, ok := existing[m.Name]; ok {
+				if _, ok := seen[m.Name]; ok {
 					continue
 				}
 
-				td.Methods = append(td.Methods, m)
+				methods = append(methods, m)
+				seen[m.Name] = struct{}{}
 			}
 		}
 
-		sort.Slice(td.Methods, func(i, j int) bool { return td.Methods[i].Name < td.Methods[j].Name })
+		sort.Slice(methods, func(i, j int) bool { return methods[i].Name < methods[j].Name })
 
-		types = append(types, td)
+		types = append(types, TypeDoc{
+			Name:    t.Name,
+			Doc:     strings.TrimSpace(t.Doc),
+			Fields:  structFieldDocs(t, fset, typesInfo),
+			Methods: methods,
+		})
 	}
 
 	var html string
