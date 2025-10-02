@@ -104,13 +104,11 @@ func setCacheEntry(cache *otter.Cache[string, cacheEntry], entry cacheEntry, key
 		return nil
 	}
 
-	if cachePersistent {
-		go func() {
-			cacheMu.Lock()
-			defer cacheMu.Unlock()
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
 
-			_ = otter.SaveCacheToFile(cache, cacheFilePath)
-		}()
+	if err := otter.SaveCacheToFile(cache, cacheFilePath); err != nil {
+		return err
 	}
 
 	return nil
