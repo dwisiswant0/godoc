@@ -1,12 +1,14 @@
 package godoc
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/doc"
 	"go/doc/comment"
+	"go/printer"
 	"go/token"
 	"go/types"
 	"os"
@@ -46,10 +48,20 @@ type MethodDoc struct {
 	Doc  string    `json:"doc" jsonschema:"method documentation"`
 }
 
-// TypeDoc represents documentation for a type, including its methods.
+// FieldDoc represents documentation for a struct field.
+type FieldDoc struct {
+	Name     string `json:"name" jsonschema:"field name"`
+	Type     string `json:"type" jsonschema:"field type"`
+	Doc      string `json:"doc" jsonschema:"field documentation"`
+	Tag      string `json:"tag,omitempty" jsonschema:"field tag"`
+	Embedded bool   `json:"embedded,omitempty" jsonschema:"whether the field is embedded"`
+}
+
+// TypeDoc represents documentation for a type, including its fields and methods.
 type TypeDoc struct {
 	Name    string      `json:"name" jsonschema:"type name"`
 	Doc     string      `json:"doc" jsonschema:"type documentation"`
+	Fields  []FieldDoc  `json:"fields" jsonschema:"struct fields"`
 	Methods []MethodDoc `json:"methods" jsonschema:"associated methods"`
 }
 
@@ -151,6 +163,7 @@ func New(opts ...Option) Godoc {
 	return g
 }
 
+// context returns the effective context for operations.
 func (d *Godoc) context() context.Context {
 	if d == nil || d.ctx == nil {
 		return context.Background()
@@ -508,8 +521,21 @@ func buildSymbolIndex(p *doc.Package, fset *token.FileSet, typesInfo *types.Info
 	for _, t := range p.Types {
 		add(t.Name, makeSymbolDoc(importPath, p, "type", t.Name, "", t.Doc, nil))
 
+		seen := make(map[string]struct{}, len(t.Methods))
 		for _, m := range t.Methods {
 			add(t.Name+"."+m.Name, makeSymbolDoc(importPath, p, "method", m.Name, t.Name, m.Doc, extractArgs(m.Decl, fset, typesInfo)))
+			seen[m.Name] = struct{}{}
+		}
+
+		if extra := interfaceMethodDocs(t, typesInfo); len(extra) > 0 {
+			for _, m := range extra {
+				if _, ok := seen[m.Name]; ok {
+					continue
+				}
+
+				add(t.Name+"."+m.Name, makeSymbolDoc(importPath, p, "method", m.Name, t.Name, m.Doc, m.Args))
+				seen[m.Name] = struct{}{}
+			}
 		}
 
 		for _, f := range t.Funcs {
@@ -584,6 +610,7 @@ func toPkgDoc(p *doc.Package, fset *token.FileSet, typesInfo *types.Info, import
 		td := TypeDoc{
 			Name:    t.Name,
 			Doc:     strings.TrimSpace(t.Doc),
+			Fields:  structFieldDocs(t, fset, typesInfo),
 			Methods: make([]MethodDoc, 0, len(t.Methods)),
 		}
 
@@ -595,6 +622,23 @@ func toPkgDoc(p *doc.Package, fset *token.FileSet, typesInfo *types.Info, import
 				Doc:  strings.TrimSpace(m.Doc),
 			})
 		}
+
+		if extra := interfaceMethodDocs(t, typesInfo); len(extra) > 0 {
+			existing := make(map[string]struct{}, len(td.Methods))
+			for _, m := range td.Methods {
+				existing[m.Name] = struct{}{}
+			}
+
+			for _, m := range extra {
+				if _, ok := existing[m.Name]; ok {
+					continue
+				}
+
+				td.Methods = append(td.Methods, m)
+			}
+		}
+
+		sort.Slice(td.Methods, func(i, j int) bool { return td.Methods[i].Name < td.Methods[j].Name })
 
 		types = append(types, td)
 	}
@@ -646,10 +690,215 @@ func makeSymbolDoc(importPath string, p *doc.Package, kind, name, recv, text str
 	}
 }
 
+// interfaceMethodDocs extracts methods from an interface type, including their
+// documentation.
+func interfaceMethodDocs(t *doc.Type, typesInfo *types.Info) []MethodDoc {
+	if t == nil || typesInfo == nil || t.Decl == nil {
+		return nil
+	}
+
+	var typeSpec *ast.TypeSpec
+	for _, spec := range t.Decl.Specs {
+		ts, ok := spec.(*ast.TypeSpec)
+		if !ok {
+			continue
+		}
+
+		if ts.Name != nil && ts.Name.Name == t.Name {
+			typeSpec = ts
+			break
+		}
+	}
+
+	if typeSpec == nil {
+		return nil
+	}
+
+	ifaceAST, ok := typeSpec.Type.(*ast.InterfaceType)
+	if !ok {
+		return nil
+	}
+
+	obj, _ := typesInfo.Defs[typeSpec.Name].(*types.TypeName)
+	if obj == nil {
+		return nil
+	}
+
+	ifaceType, _ := obj.Type().Underlying().(*types.Interface)
+	if ifaceType == nil {
+		return nil
+	}
+
+	ifaceType = ifaceType.Complete()
+
+	docMap := make(map[string]string)
+	if ifaceAST.Methods != nil {
+		for _, field := range ifaceAST.Methods.List {
+			if len(field.Names) == 0 {
+				continue
+			}
+
+			name := field.Names[0].Name
+			docText := ""
+			if field.Doc != nil {
+				docText = field.Doc.Text()
+			} else if field.Comment != nil {
+				docText = field.Comment.Text()
+			}
+
+			docMap[name] = strings.TrimSpace(docText)
+		}
+	}
+
+	methods := make([]MethodDoc, 0, ifaceType.NumMethods())
+	for i := 0; i < ifaceType.NumMethods(); i++ {
+		method := ifaceType.Method(i)
+		sig, _ := method.Type().(*types.Signature)
+
+		methods = append(methods, MethodDoc{
+			Recv: t.Name,
+			Name: method.Name(),
+			Args: argsFromSignature(sig, nil),
+			Doc:  docMap[method.Name()],
+		})
+	}
+
+	return methods
+}
+
+// structFieldDocs extracts field documentation for struct types, preserving
+// field order.
+func structFieldDocs(t *doc.Type, fset *token.FileSet, typesInfo *types.Info) []FieldDoc {
+	if t == nil || t.Decl == nil {
+		return nil
+	}
+
+	var typeSpec *ast.TypeSpec
+	for _, spec := range t.Decl.Specs {
+		ts, ok := spec.(*ast.TypeSpec)
+		if !ok {
+			continue
+		}
+
+		if ts.Name != nil && ts.Name.Name == t.Name {
+			typeSpec = ts
+			break
+		}
+	}
+
+	if typeSpec == nil {
+		return nil
+	}
+
+	structType, ok := typeSpec.Type.(*ast.StructType)
+	if !ok || structType.Fields == nil {
+		return nil
+	}
+
+	fields := make([]FieldDoc, 0, len(structType.Fields.List))
+	for _, field := range structType.Fields.List {
+		typeStr := fieldTypeString(field, typesInfo, fset)
+
+		docText := ""
+		if field.Doc != nil {
+			docText = field.Doc.Text()
+		} else if field.Comment != nil {
+			docText = field.Comment.Text()
+		}
+		docText = strings.TrimSpace(docText)
+
+		tag := ""
+		if field.Tag != nil {
+			tag = strings.Trim(field.Tag.Value, "`")
+		}
+
+		if len(field.Names) == 0 {
+			name := embeddedFieldName(field, fset, typeStr)
+			fields = append(fields, FieldDoc{
+				Name:     name,
+				Type:     typeStr,
+				Doc:      docText,
+				Tag:      tag,
+				Embedded: true,
+			})
+			continue
+		}
+
+		for _, ident := range field.Names {
+			fields = append(fields, FieldDoc{
+				Name: ident.Name,
+				Type: typeStr,
+				Doc:  docText,
+				Tag:  tag,
+			})
+		}
+	}
+
+	return fields
+}
+
+// fieldTypeString returns the string representation of a field's type, using
+// types information if available, otherwise falling back to AST.
+func fieldTypeString(field *ast.Field, typesInfo *types.Info, fset *token.FileSet) string {
+	if field == nil || field.Type == nil {
+		return ""
+	}
+
+	if typesInfo != nil {
+		if tv, ok := typesInfo.Types[field.Type]; ok && tv.Type != nil {
+			return tv.Type.String()
+		}
+	}
+
+	return exprString(field.Type, fset)
+}
+
+// embeddedFieldName derives the name of an embedded field from its type.
+func embeddedFieldName(field *ast.Field, fset *token.FileSet, typeStr string) string {
+	if typeStr != "" {
+		return strings.TrimPrefix(typeStr, "*")
+	}
+
+	return strings.TrimPrefix(exprString(field.Type, fset), "*")
+}
+
+// exprString returns the string representation of an AST expression.
+func exprString(expr ast.Expr, fset *token.FileSet) string {
+	if expr == nil {
+		return ""
+	}
+
+	var buf bytes.Buffer
+	if err := printer.Fprint(&buf, fset, expr); err != nil {
+		buf.Reset()
+		if err := printer.Fprint(&buf, token.NewFileSet(), expr); err != nil {
+			return ""
+		}
+	}
+
+	return buf.String()
+}
+
 // extractArgs extracts argument information from a function declaration.
 func extractArgs(decl *ast.FuncDecl, _ *token.FileSet, typesInfo *types.Info) []ArgInfo {
 	if decl == nil || decl.Type == nil || decl.Type.Params == nil {
 		return nil
+	}
+
+	names := make([]string, 0, decl.Type.Params.NumFields())
+	for _, field := range decl.Type.Params.List {
+		if len(field.Names) == 0 {
+			names = append(names, "")
+			continue
+		}
+
+		for _, name := range field.Names {
+			names = append(names, name.Name)
+		}
+	}
+
+	if sig := signatureForDecl(decl, typesInfo); sig != nil {
+		return argsFromSignature(sig, names)
 	}
 
 	var args []ArgInfo
@@ -671,13 +920,74 @@ func extractArgs(decl *ast.FuncDecl, _ *token.FileSet, typesInfo *types.Info) []
 		}
 
 		if len(field.Names) == 0 {
-			// Unnamed parameter
 			args = append(args, ArgInfo{Name: "", Type: typ})
 		} else {
 			for _, name := range field.Names {
 				args = append(args, ArgInfo{Name: name.Name, Type: typ})
 			}
 		}
+	}
+
+	return args
+}
+
+// signatureForDecl retrieves the types.Signature for a given function
+// declaration.
+func signatureForDecl(decl *ast.FuncDecl, typesInfo *types.Info) *types.Signature {
+	if decl == nil || typesInfo == nil {
+		return nil
+	}
+
+	if decl.Name != nil {
+		if obj := typesInfo.ObjectOf(decl.Name); obj != nil {
+			if fn, ok := obj.(*types.Func); ok {
+				if sig, ok := fn.Type().(*types.Signature); ok {
+					return sig
+				}
+			}
+		}
+	}
+
+	if info, ok := typesInfo.Types[decl.Type]; ok {
+		if sig, ok := info.Type.(*types.Signature); ok {
+			return sig
+		}
+	}
+
+	return nil
+}
+
+func argsFromSignature(sig *types.Signature, nameHints []string) []ArgInfo {
+	if sig == nil {
+		return nil
+	}
+
+	params := sig.Params()
+	if params == nil {
+		return nil
+	}
+
+	args := make([]ArgInfo, 0, params.Len())
+	for i := 0; i < params.Len(); i++ {
+		param := params.At(i)
+		name := param.Name()
+		if name == "" && i < len(nameHints) && nameHints[i] != "" {
+			name = nameHints[i]
+		}
+
+		typeStr := param.Type().String()
+		if sig.Variadic() && i == params.Len()-1 {
+			if slice, ok := param.Type().(*types.Slice); ok {
+				typeStr = "..." + slice.Elem().String()
+			} else {
+				typeStr = "..." + typeStr
+			}
+		}
+
+		args = append(args, ArgInfo{
+			Name: name,
+			Type: typeStr,
+		})
 	}
 
 	return args
