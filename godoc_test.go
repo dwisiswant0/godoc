@@ -2,6 +2,7 @@ package godoc_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -177,6 +178,51 @@ func TestLoadSymbolWithDot(t *testing.T) {
 	}
 	if symDoc.Receiver != "File" {
 		t.Errorf("Expected Receiver File, got %s", symDoc.Receiver)
+	}
+}
+
+func TestStructFieldsIncluded(t *testing.T) {
+	g := newTestGodoc()
+	result, err := g.Load("net/http", "", "")
+	if err != nil {
+		t.Fatalf("Failed to load net/http: %v", err)
+	}
+
+	pkgDoc, ok := result.(godoc.PackageDoc)
+	if !ok {
+		t.Fatalf("Expected PackageDoc, got %T", result)
+	}
+
+	var requestDoc *godoc.TypeDoc
+	for i := range pkgDoc.Types {
+		if pkgDoc.Types[i].Name == "Request" {
+			requestDoc = &pkgDoc.Types[i]
+			break
+		}
+	}
+
+	if requestDoc == nil {
+		t.Fatalf("Expected Request type in net/http")
+	}
+
+	if len(requestDoc.Fields) == 0 {
+		t.Fatalf("Expected struct fields for net/http.Request")
+	}
+
+	var methodField *godoc.FieldDoc
+	for i := range requestDoc.Fields {
+		if requestDoc.Fields[i].Name == "Method" {
+			methodField = &requestDoc.Fields[i]
+			break
+		}
+	}
+
+	if methodField == nil {
+		t.Fatalf("Expected Method field on net/http.Request")
+	}
+
+	if methodField.Type != "string" {
+		t.Fatalf("Expected Method field type string, got %s", methodField.Type)
 	}
 }
 
@@ -573,6 +619,34 @@ func TestSymbolDocArgsVariadic(t *testing.T) {
 	}
 }
 
+func TestSymbolDocGenericArgs(t *testing.T) {
+	g := newTestGodoc()
+	result, err := g.Load("slices", "Insert", "")
+	if err != nil {
+		t.Fatalf("Failed to load slices.Insert: %v", err)
+	}
+	symDoc, ok := result.(godoc.SymbolDoc)
+	if !ok {
+		t.Fatalf("Expected SymbolDoc, got %T", result)
+	}
+
+	if len(symDoc.Args) != 3 {
+		t.Fatalf("Expected 3 args for slices.Insert, got %d", len(symDoc.Args))
+	}
+
+	if symDoc.Args[0].Type != "S" {
+		t.Errorf("expected first argument type S, got %q", symDoc.Args[0].Type)
+	}
+
+	if symDoc.Args[1].Type != "int" {
+		t.Errorf("expected second argument type int, got %q", symDoc.Args[1].Type)
+	}
+
+	if symDoc.Args[2].Type != "...E" {
+		t.Errorf("expected third argument type ...E, got %q", symDoc.Args[2].Type)
+	}
+}
+
 func TestPackageDocSynopsis(t *testing.T) {
 	g := newTestGodoc()
 	result, err := g.Load("fmt", "", "")
@@ -795,4 +869,26 @@ func TestLoadWithWhitespaceVersion(t *testing.T) {
 		t.Fatalf("Failed to load with whitespace version: %v", err)
 	}
 	_ = result
+}
+
+func TestLoadImportPathParentTraversal(t *testing.T) {
+	g := godoc.New()
+	_, err := g.Load("../fmt", "", "")
+	if err == nil {
+		t.Fatalf("expected error for parent traversal import path")
+	}
+	if !errors.Is(err, godoc.ErrInvalidImportPath) {
+		t.Fatalf("expected ErrInvalidImportPath, got %v", err)
+	}
+}
+
+func TestLoadImportPathAbsolute(t *testing.T) {
+	g := godoc.New()
+	_, err := g.Load("/fmt", "", "")
+	if err == nil {
+		t.Fatalf("expected error for absolute import path")
+	}
+	if !errors.Is(err, godoc.ErrInvalidImportPath) {
+		t.Fatalf("expected ErrInvalidImportPath, got %v", err)
+	}
 }

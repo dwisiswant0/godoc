@@ -145,6 +145,8 @@ type Godoc struct {
 	goarch  string
 	workdir string
 	ctx     context.Context
+	loadPkg func(string, string) (*doc.Package, *token.FileSet, *types.Info, string, *packages.Module, string, error)
+	checkDep func(string, string) (string, func(), error)
 }
 
 // New creates a new [Godoc] with the specified configuration.
@@ -159,6 +161,9 @@ func New(opts ...Option) Godoc {
 	if g.ctx == nil {
 		g.ctx = context.Background()
 	}
+
+	g.loadPkg = g.loadDocPkg
+	g.checkDep = g.checkModuleDep
 
 	return g
 }
@@ -312,11 +317,19 @@ func (d *Godoc) getOrLoadSymbol(importPath, symbol, version string) (SymbolDoc, 
 // buildDoc loads and builds documentation for the specified import path and
 // version.
 func (d *Godoc) buildDoc(importPath, version string, needSymbols bool) (PackageDoc, map[string]SymbolDoc, string, string, cacheMetadata, error) {
+	if d.loadPkg == nil {
+		d.loadPkg = d.loadDocPkg
+	}
+
+	if d.checkDep == nil {
+		d.checkDep = d.checkModuleDep
+	}
+
 	var symbols, symbols2 map[string]SymbolDoc
 
 	trimmedVersion := strings.TrimSpace(version)
 
-	dpkg, fset, typesInfo, pkgPath, module, _, err := d.loadDocPkg(importPath, "")
+	dpkg, fset, typesInfo, pkgPath, module, _, err := d.loadPkg(importPath, "")
 	if err == nil {
 		pkgDoc := toPkgDoc(dpkg, fset, typesInfo, pkgPath)
 		if needSymbols {
@@ -337,7 +350,7 @@ func (d *Godoc) buildDoc(importPath, version string, needSymbols bool) (PackageD
 		return pkgDoc, symbols, pkgPath, trimmedVersion, meta, nil
 	}
 
-	modDir, cleanup, err2 := d.checkModuleDep(importPath, trimmedVersion)
+	modDir, cleanup, err2 := d.checkDep(importPath, trimmedVersion)
 	if err2 != nil {
 		return PackageDoc{}, nil, "", "", cacheMetadata{}, fmt.Errorf("local load failed (%v) and module dependency setup failed (%v)", err, err2)
 	}
@@ -346,7 +359,7 @@ func (d *Godoc) buildDoc(importPath, version string, needSymbols bool) (PackageD
 		defer cleanup()
 	}
 
-	dpkg2, fset2, typesInfo2, pkgPath2, module2, _, err3 := d.loadDocPkg(importPath, modDir)
+	dpkg2, fset2, typesInfo2, pkgPath2, module2, _, err3 := d.loadPkg(importPath, modDir)
 	if err3 != nil {
 		return PackageDoc{}, nil, "", "", cacheMetadata{}, fmt.Errorf("load with module dependency failed: %w", err3)
 	}
@@ -872,7 +885,7 @@ func exprString(expr ast.Expr, fset *token.FileSet) string {
 }
 
 // extractArgs extracts argument information from a function declaration.
-func extractArgs(decl *ast.FuncDecl, _ *token.FileSet, typesInfo *types.Info) []ArgInfo {
+func extractArgs(decl *ast.FuncDecl, fset *token.FileSet, typesInfo *types.Info) []ArgInfo {
 	if decl == nil || decl.Type == nil || decl.Type.Params == nil {
 		return nil
 	}
@@ -909,6 +922,10 @@ func extractArgs(decl *ast.FuncDecl, _ *token.FileSet, typesInfo *types.Info) []
 					typ = tv.Type.String()
 				}
 			}
+		}
+
+		if typ == "" && field.Type != nil {
+			typ = exprString(field.Type, fset)
 		}
 
 		if len(field.Names) == 0 {
