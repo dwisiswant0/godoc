@@ -16,18 +16,20 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+// cacheMetadata holds metadata about the cached entry.
 type cacheMetadata struct {
 	GoVersion     string
 	ModuleVersion string
 }
 
+// cacheEntry represents a cached documentation entry.
 type cacheEntry struct {
 	Package *PackageDoc
 	Symbol  *SymbolDoc
 	cacheMetadata
 }
 
-// getCache gets the initialized global cache, initializing it if necessary.
+// getCache initializes and returns the global cache instance.
 func getCache() (*otter.Cache[string, cacheEntry], error) {
 	var cacheInitErr error
 
@@ -54,7 +56,7 @@ func getCache() (*otter.Cache[string, cacheEntry], error) {
 			StatsRecorder:    stats.NewCounter(),
 		})
 
-		if err := otter.LoadCacheFromFile(cache, cacheFilePath); err != nil {
+		if err := loadCacheFromFile(cache, cacheFilePath); err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {
 				cachePersistent = false
 				cacheFilePath = ""
@@ -160,4 +162,14 @@ func deriveCacheMetadata(module *packages.Module, resolvedVersion string) cacheM
 	}
 
 	return meta
+}
+
+func loadCacheFromFile(cache *otter.Cache[string, cacheEntry], path string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("load cache panic: %v", r)
+		}
+	}()
+
+	return otter.LoadCacheFromFile(cache, path)
 }
