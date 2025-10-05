@@ -77,6 +77,19 @@ func TestLoadSymbolFunction(t *testing.T) {
 	if symDoc.Package != "fmt" {
 		t.Errorf("Expected Package fmt, got %s", symDoc.Package)
 	}
+	if symDoc.FuncDoc == nil {
+		t.Fatalf("Expected FuncDoc for function symbol")
+	}
+	if len(symDoc.Returns) < 2 {
+		t.Errorf("Expected Printf to have at least two return values, got %d", len(symDoc.Returns))
+	} else {
+		if symDoc.Returns[0].Type != "int" {
+			t.Errorf("Expected first return type int, got %s", symDoc.Returns[0].Type)
+		}
+		if symDoc.Returns[1].Type != "error" {
+			t.Errorf("Expected second return type error, got %s", symDoc.Returns[1].Type)
+		}
+	}
 }
 
 func TestLoadSymbolType(t *testing.T) {
@@ -94,6 +107,18 @@ func TestLoadSymbolType(t *testing.T) {
 	}
 	if symDoc.Name != "Stringer" {
 		t.Errorf("Expected Name Stringer, got %s", symDoc.Name)
+	}
+	if symDoc.TypeDoc == nil {
+		t.Fatalf("Expected TypeDoc for type symbol")
+	}
+	if symDoc.TypeDoc.Name != "Stringer" {
+		t.Errorf("Expected embedded TypeDoc name Stringer, got %s", symDoc.TypeDoc.Name)
+	}
+	if len(symDoc.Methods) == 0 {
+		t.Fatalf("Expected TypeDoc methods for Stringer")
+	}
+	if symDoc.Methods[0].Name != "String" {
+		t.Errorf("Expected first method String, got %s", symDoc.Methods[0].Name)
 	}
 }
 
@@ -115,6 +140,14 @@ func TestLoadSymbolMethod(t *testing.T) {
 	}
 	if symDoc.Receiver != "Request" {
 		t.Errorf("Expected Receiver Request, got %s", symDoc.Receiver)
+	}
+	if symDoc.FuncDoc == nil {
+		t.Fatalf("Expected FuncDoc for method symbol")
+	}
+	if len(symDoc.Returns) != 1 {
+		t.Errorf("Expected ParseForm to return single value, got %d", len(symDoc.Returns))
+	} else if symDoc.Returns[0].Type != "error" {
+		t.Errorf("Expected ParseForm to return error, got %s", symDoc.Returns[0].Type)
 	}
 }
 
@@ -237,12 +270,20 @@ func TestExtractArgs(t *testing.T) {
 	if !ok {
 		t.Errorf("Expected SymbolDoc, got %T", result)
 	}
+	if symDoc.FuncDoc == nil {
+		t.Fatalf("Expected FuncDoc for Sprintf")
+	}
 	if len(symDoc.Args) < 1 {
 		t.Errorf("Expected at least one arg for Sprintf")
 	}
 	// Check first arg is format string
 	if symDoc.Args[0].Type != "string" {
 		t.Errorf("Expected first arg type string, got %s", symDoc.Args[0].Type)
+	}
+	if len(symDoc.Returns) != 1 {
+		t.Errorf("Expected Sprintf to return one value, got %d", len(symDoc.Returns))
+	} else if symDoc.Returns[0].Type != "string" {
+		t.Errorf("Expected Sprintf return type string, got %s", symDoc.Returns[0].Type)
 	}
 }
 
@@ -603,6 +644,9 @@ func TestSymbolDocArgsVariadic(t *testing.T) {
 		t.Errorf("Expected SymbolDoc, got %T", result)
 	}
 	// Printf has variadic args
+	if symDoc.FuncDoc == nil {
+		t.Fatalf("Expected FuncDoc for Printf")
+	}
 	if len(symDoc.Args) < 2 {
 		t.Errorf("Expected at least 2 args for Printf")
 	}
@@ -628,6 +672,9 @@ func TestSymbolDocGenericArgs(t *testing.T) {
 	symDoc, ok := result.(godoc.SymbolDoc)
 	if !ok {
 		t.Fatalf("Expected SymbolDoc, got %T", result)
+	}
+	if symDoc.FuncDoc == nil {
+		t.Fatalf("Expected FuncDoc for slices.Insert")
 	}
 
 	if len(symDoc.Args) != 3 {
