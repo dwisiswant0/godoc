@@ -1,5 +1,9 @@
 # godoc
 
+[![Tests](https://github.com/dwisiswant0/godoc/actions/workflows/tests.yaml/badge.svg?branch=master)](https://github.com/dwisiswant0/godoc/actions/workflows/tests.yaml)
+[![Go Reference](https://pkg.go.dev/badge/go.dw1.io/godoc.svg)](https://pkg.go.dev/go.dw1.io/godoc)
+[![Go Report Card](https://goreportcard.com/badge/go.dw1.io/godoc)](https://goreportcard.com/report/go.dw1.io/godoc)
+
 A suite of tools for exploring Go API documentation.
 
 <img src="https://github.com/user-attachments/assets/57337c20-b523-4088-a5a5-a595ff5b133a" href="#" height="480">
