@@ -39,9 +39,11 @@ For library, see [library](#library) section.
 
 ```text
 godoc-cli [options]
-godoc-cli [options] <import-path>
-godoc-cli [options] <symbol>
-godoc-cli [options] <import-path> <symbol>
+godoc-cli [options] <pkg>
+godoc-cli [options] <sym>[.<methodOrField>]
+godoc-cli [options] [<pkg>.]<sym>[.<methodOrField>]
+godoc-cli [options] [<pkg>.][<sym>.]<methodOrField>
+godoc-cli [options] <pkg> <sym>[.<methodOrField>]
 ```
 
 **Options**
@@ -61,8 +63,8 @@ godoc-cli [options] <import-path> <symbol>
 
 > [!TIP]
 > * Use `-style=notty` in environments without ANSI color support.
-> * Pipe into `glow`, `less -R`, or your pager of choice to explore large packages.
-> * With `-pager`, press `?` to toggle inline help or `c` to copy the document to your clipboard.
+> * Use `-pager` to explore large packages.
+>   * With `-pager`, press `?` to toggle inline help or `c` to copy the document to your clipboard.
 > * The CLI shares caches and configuration with the library, so Go toolchain settings (`GOPROXY`, `GOCACHE`, etc.) apply automatically.
 
 #### Examples
