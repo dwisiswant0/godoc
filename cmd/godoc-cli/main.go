@@ -318,15 +318,6 @@ func formatMethodSignature(m godoc.MethodDoc) string {
 	return fmt.Sprintf("func %s(%s)%s", m.Name, params, returns)
 }
 
-func formatMethodHeading(m godoc.MethodDoc) string {
-	recv := formatReceiverClause(m)
-	if recv != "" {
-		return fmt.Sprintf("func %s %s", recv, m.Name)
-	}
-
-	return fmt.Sprintf("func %s", m.Name)
-}
-
 func formatSymbolSignature(sym godoc.SymbolDoc) string {
 	if sym.FuncDoc == nil {
 		return ""
@@ -339,8 +330,8 @@ func formatSymbolSignature(sym godoc.SymbolDoc) string {
 			RecvName: sym.ReceiverName,
 			RecvType: sym.ReceiverType,
 			Name:     sym.Name,
-			Args:     sym.FuncDoc.Args,
-			Returns:  sym.FuncDoc.Returns,
+			Args:     sym.Args,
+			Returns:  sym.Returns,
 		}
 		return formatMethodSignature(m)
 	case "func":
@@ -358,7 +349,7 @@ func buildSymbolMarkdown(sym godoc.SymbolDoc) string {
 	sb.WriteString(fmt.Sprintf("```\n// import %q\n```\n\n", sym.ImportPath))
 
 	if strings.EqualFold(sym.Kind, "type") && sym.TypeDoc != nil {
-		if decl := sym.TypeDoc.Decl; decl != "" {
+		if decl := sym.Decl; decl != "" {
 			sb.WriteString("```go\n")
 			sb.WriteString(decl)
 			sb.WriteString("\n```\n\n")
@@ -371,7 +362,7 @@ func buildSymbolMarkdown(sym godoc.SymbolDoc) string {
 		}
 
 		if sym.TypeDoc.Kind != "interface" {
-			for _, m := range sym.TypeDoc.Methods {
+			for _, m := range sym.Methods {
 				sig := formatMethodSignature(m)
 				if sig != "" {
 					sb.WriteString("```go\n")
