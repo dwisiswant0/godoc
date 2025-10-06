@@ -296,14 +296,14 @@ func ExampleGodoc_Load_errorHandling() {
 	// Output: Error handled correctly: true
 }
 
-// ExampleGodoc_Load_invalidSymbol demonstrates handling invalid symbol names.
-func ExampleGodoc_Load_invalidSymbol() {
+// ExampleGodoc_Load_invalidSelector demonstrates handling invalid selectors.
+func ExampleGodoc_Load_invalidSelector() {
 	g := godoc.New()
 	_, err := g.Load("fmt", "NonExistentFunction", "")
 	if err != nil {
-		fmt.Println("Invalid symbol error handled:", err != nil)
+		fmt.Println("Invalid selector error handled:", err != nil)
 	}
-	// Output: Invalid symbol error handled: true
+	// Output: Invalid selector error handled: true
 }
 
 // ExampleGodoc_Load_emptyImportPath demonstrates handling empty import paths.

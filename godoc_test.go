@@ -18,8 +18,8 @@ func newTestGodoc(opts ...godoc.Option) testGodoc {
 	return testGodoc{Godoc: godoc.New(opts...)}
 }
 
-func (g testGodoc) Load(importPath, symbol, version string) (godoc.Result, error) {
-	return g.Godoc.Load(importPath, symbol, version)
+func (g testGodoc) Load(importPath, sel, version string) (godoc.Result, error) {
+	return g.Godoc.Load(importPath, sel, version)
 }
 
 func TestNew(t *testing.T) {

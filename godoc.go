@@ -57,22 +57,22 @@ func (d *Godoc) context() context.Context {
 	return d.ctx
 }
 
-// Load loads documentation for a Go package or a specific symbol within it.
+// Load loads documentation for a Go package or a specific selector within it.
 //
-// If symbol is empty, it loads the entire package documentation.
-// Otherwise, it loads documentation for the specified symbol (type, method,
+// If sel is empty, it loads the entire package documentation.
+// Otherwise, it loads documentation for the specified selector (type, method,
 // function, const, or var).
 //
 // For remote packages, it may add them to the current module to fetch the
 // documentation.
 //
 // Version specifies the module version to use; if empty, uses the latest.
-func (d *Godoc) Load(importPath, symbol, version string) (Result, error) {
-	if err := validateInputs(importPath, symbol); err != nil {
+func (d *Godoc) Load(importPath, sel, version string) (Result, error) {
+	if err := validateInputs(importPath, sel); err != nil {
 		return nil, err
 	}
 
-	if symbol == "" {
+	if sel == "" {
 		pkgDoc, _, err := d.getOrLoadPkg(importPath, version)
 		if err != nil {
 			return nil, err
@@ -81,7 +81,7 @@ func (d *Godoc) Load(importPath, symbol, version string) (Result, error) {
 		return pkgDoc, nil
 	}
 
-	symDoc, pkgPath, err := d.getOrLoadSymbol(importPath, symbol, version)
+	symDoc, pkgPath, err := d.getOrLoadSymbol(importPath, sel, version)
 	if err != nil {
 		return nil, err
 	}
@@ -146,14 +146,14 @@ func (d *Godoc) getOrLoadPkg(importPath, version string) (PackageDoc, string, er
 }
 
 // getOrLoadSymbol gets symbol doc from cache (or loads it if not cached).
-func (d *Godoc) getOrLoadSymbol(importPath, symbol, version string) (SymbolDoc, string, error) {
+func (d *Godoc) getOrLoadSymbol(importPath, sel, version string) (SymbolDoc, string, error) {
 	cache, err := getCache()
 	if err != nil {
 		return SymbolDoc{}, "", err
 	}
 
 	expected := getPkgVersion(importPath, version)
-	key := getCacheKey(importPath, expected, symbol)
+	key := getCacheKey(importPath, expected, sel)
 
 	if entry, ok := cache.GetIfPresent(key); ok {
 		if entry.Symbol != nil {
@@ -178,9 +178,9 @@ func (d *Godoc) getOrLoadSymbol(importPath, symbol, version string) (SymbolDoc, 
 		return SymbolDoc{}, "", err
 	}
 
-	symDoc, ok := symbols[symbol]
+	symDoc, ok := symbols[sel]
 	if !ok {
-		return SymbolDoc{}, pkgPath, fmt.Errorf("symbol %q not found in %q", symbol, pkgPath)
+		return SymbolDoc{}, pkgPath, fmt.Errorf("selector %q not found in %q", sel, pkgPath)
 	}
 
 	entry := cacheEntry{
@@ -188,9 +188,9 @@ func (d *Godoc) getOrLoadSymbol(importPath, symbol, version string) (SymbolDoc, 
 		cacheMetadata: meta,
 	}
 
-	keys := uniqKeys(key, getCacheKey(importPath, "", symbol))
+	keys := uniqKeys(key, getCacheKey(importPath, "", sel))
 	if actualVersion != "" {
-		keys = append(keys, getCacheKey(importPath, actualVersion, symbol))
+		keys = append(keys, getCacheKey(importPath, actualVersion, sel))
 	}
 
 	if err := setCacheEntry(cache, entry, keys...); err != nil {

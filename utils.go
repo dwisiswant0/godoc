@@ -14,8 +14,8 @@ import (
 	"golang.org/x/mod/modfile"
 )
 
-// validateInputs checks the import path and symbol for validity and security.
-func validateInputs(importPath, symbol string) error {
+// validateInputs checks the import path and selector for validity and security.
+func validateInputs(importPath, sel string) error {
 	if strings.TrimSpace(importPath) == "" {
 		return ErrEmptyImportPath
 	}
@@ -28,8 +28,8 @@ func validateInputs(importPath, symbol string) error {
 		return fmt.Errorf("%w: cannot start with '/'", ErrInvalidImportPath)
 	}
 
-	if symbol != "" && !symbolRegex.MatchString(symbol) {
-		return fmt.Errorf("%w: %q", ErrInvalidSymbol, symbol)
+	if sel != "" && !selectorRegex.MatchString(sel) {
+		return fmt.Errorf("%w: %q", ErrInvalidSelector, sel)
 	}
 
 	return nil

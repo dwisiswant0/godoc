@@ -61,13 +61,13 @@ g := godoc.New(godoc.WithContext(ctx))
 The `Load` method signature:
 
 ```go
-Load(importPath, symbol, version string) (Result, error)
+Load(importPath, sel, version string) (Result, error)
 ```
 
 **Parameters:**
 
 - `importPath`: Package import path (e.g., "fmt", "net/http", "github.com/user/repo")
-- `symbol`: Specific symbol name (empty for entire package)
+- `sel`: Selector for the symbol to load (empty for entire package)
 - `version`: Module version (empty for latest/default)
 
 **Returns:**
@@ -198,7 +198,7 @@ The library returns different result types based on what was loaded:
 
 ### `PackageDoc`
 
-Returned when loading an entire package (empty `symbol` parameter):
+Returned when loading an entire package (empty `sel` parameter):
 
 ```go
 type PackageDoc struct {

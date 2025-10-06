@@ -82,13 +82,13 @@ func getCacheDir() (string, error) {
 	return filepath.Join(dir, "godoc"), nil
 }
 
-func getCacheKey(importPath, version, symbol string) string {
+func getCacheKey(importPath, version, sel string) string {
 	hash := fnv.New64a()
 	hash.Write([]byte(importPath))
 	hash.Write([]byte{0})
 	hash.Write([]byte(version))
 	hash.Write([]byte{0})
-	hash.Write([]byte(symbol))
+	hash.Write([]byte(sel))
 
 	return fmt.Sprintf("%x", hash.Sum64())
 }
