@@ -15,11 +15,13 @@ It ships with:
 > [!NOTE]
 > Requires Go 1.25 or newer.
 
+Install the [godoc CLI](#cli) and [godoc MCP](#mcp) from source:
+
 ```bash
 go install go.dw1.io/godoc/cmd/godoc-{cli,mcp}@latest
 ```
 
-The binary will be placed in `$GOBIN` (or `$GOPATH/bin` if unset).
+The binaries will be placed in `$GOBIN` (or `$GOPATH/bin` if unset).
 
 For library, see [library](#library) section.
 
