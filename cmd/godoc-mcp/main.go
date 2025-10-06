@@ -60,7 +60,7 @@ func loadHandler(ctx context.Context, req *mcp.CallToolRequest, args loadArgs) (
 func main() {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "godoc-mcp",
-		Version: "0.2.0",
+		Version: "0.3.0",
 	}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{

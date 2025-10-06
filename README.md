@@ -1,8 +1,12 @@
 # godoc
 
+[![Tests](https://github.com/dwisiswant0/godoc/actions/workflows/tests.yaml/badge.svg?branch=master)](https://github.com/dwisiswant0/godoc/actions/workflows/tests.yaml)
+[![Go Reference](https://pkg.go.dev/badge/go.dw1.io/godoc.svg)](https://pkg.go.dev/go.dw1.io/godoc)
+[![Go Report Card](https://goreportcard.com/badge/go.dw1.io/godoc)](https://goreportcard.com/report/go.dw1.io/godoc)
+
 A suite of tools for exploring Go API documentation.
 
-<img src="https://github.com/user-attachments/assets/3a7a614d-c427-4833-b77c-1a6ff54a8393" href="#" height="480">
+<img src="https://github.com/user-attachments/assets/57337c20-b523-4088-a5a5-a595ff5b133a" href="#" height="480">
 
 It ships with:
 
@@ -49,6 +53,7 @@ godoc-cli [options] <import-path> <symbol>
 | `-workdir string` | Working directory for resolving relative import paths (default: current dir). |
 | `-version string` | Module version to fetch (e.g., `v1.2.3`, `latest`). |
 | `-style string` | Glamour theme: `auto` (default), `dark`, `light`, `notty`. |
+| `-pager` | Render output inside an interactive pager UI (press `?` for controls, `c` to copy). |
 | `-json` | Emit raw JSON instead of rendered Markdown. |
 | `-help` | Print the usage guide. |
 
@@ -57,6 +62,7 @@ godoc-cli [options] <import-path> <symbol>
 > [!TIP]
 > * Use `-style=notty` in environments without ANSI color support.
 > * Pipe into `glow`, `less -R`, or your pager of choice to explore large packages.
+> * With `-pager`, press `?` to toggle inline help or `c` to copy the document to your clipboard.
 > * The CLI shares caches and configuration with the library, so Go toolchain settings (`GOPROXY`, `GOCACHE`, etc.) apply automatically.
 
 #### Examples
@@ -95,6 +101,11 @@ godoc-cli -version v1.8.0 github.com/gorilla/mux
 godoc-cli -json fmt.Printf | jq
 ```
 
+**Interactive pager**
+
+```bash
+godoc-cli -pager net/http Request
+```
 
 **Platform-specific APIs**
 

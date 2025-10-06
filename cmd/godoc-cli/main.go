@@ -12,6 +12,7 @@ import (
 
 	"github.com/charmbracelet/glamour"
 	"go.dw1.io/godoc"
+	"go.dw1.io/godoc/internal/pager"
 	"golang.org/x/term"
 )
 
@@ -32,6 +33,7 @@ Options:
    -workdir string  Working directory for package resolution (default: current directory)
    -version string  Module version (e.g., v1.2.3, latest)
    -style string    Glamour style (dark, light, notty, auto) (default: auto)
+   -pager           View output in an interactive pager
    -json            Output raw JSON instead of rendered markdown
    -help            Show this help message
 
@@ -65,6 +67,7 @@ type config struct {
 	version    string
 	style      string
 	jsonOutput bool
+	pager      bool
 }
 
 func main() {
@@ -75,6 +78,7 @@ func main() {
 	flag.StringVar(&cfg.workdir, "workdir", "", "working directory for package resolution")
 	flag.StringVar(&cfg.version, "version", "", "module version")
 	flag.StringVar(&cfg.style, "style", "auto", "glamour style (dark, light, notty, auto)")
+	flag.BoolVar(&cfg.pager, "pager", false, "view output in an interactive pager")
 	flag.BoolVar(&cfg.jsonOutput, "json", false, "output raw JSON")
 	flag.Usage = func() {
 		fmt.Fprint(os.Stderr, usage)
@@ -121,7 +125,30 @@ func run(cfg config, importPath, sel string) error {
 		return outputJSON(result)
 	}
 
-	return outputMarkdown(result, cfg)
+	rendered, raw, actualImportPath, err := renderMarkdown(result, cfg)
+	if err != nil {
+		return err
+	}
+
+	label := buildPagerLabel(result, actualImportPath, sel)
+	doc := pager.Document{Content: rendered, Raw: raw, Label: label}
+
+	if cfg.pager {
+		if !term.IsTerminal(int(os.Stdout.Fd())) {
+			fmt.Print(doc.Content)
+			return nil
+		}
+
+		if err := pager.Run(doc); err != nil {
+			return fmt.Errorf("failed to launch pager: %w", err)
+		}
+
+		return nil
+	}
+
+	fmt.Print(doc.Content)
+
+	return nil
 }
 
 func outputJSON(result godoc.Result) error {
@@ -547,9 +574,11 @@ func getWordWrapWidth() int {
 	return 0
 }
 
-func outputMarkdown(result godoc.Result, cfg config) error {
-	var importPath string
-	var markdown string
+func renderMarkdown(result godoc.Result, cfg config) (string, string, string, error) {
+	var (
+		importPath string
+		markdown   = result.Text()
+	)
 
 	switch v := result.(type) {
 	case godoc.PackageDoc:
@@ -563,8 +592,11 @@ func outputMarkdown(result godoc.Result, cfg config) error {
 		}
 	}
 
-	markdown = convertDocLinks(markdown, importPath)
+	if importPath != "" {
+		markdown = convertDocLinks(markdown, importPath)
+	}
 	markdown = addLangIdentifier(markdown)
+	raw := markdown
 
 	renderOpts := []glamour.TermRendererOption{}
 	if width := getWordWrapWidth(); width > 0 {
@@ -580,15 +612,57 @@ func outputMarkdown(result godoc.Result, cfg config) error {
 
 	r, err := glamour.NewTermRenderer(renderOpts...)
 	if err != nil {
-		return fmt.Errorf("failed to create renderer: %w", err)
+		return "", "", "", fmt.Errorf("failed to create renderer: %w", err)
 	}
 
 	rendered, err := r.Render(markdown)
 	if err != nil {
-		return fmt.Errorf("failed to render markdown: %w", err)
+		return "", "", "", fmt.Errorf("failed to render markdown: %w", err)
 	}
 
-	fmt.Print(rendered)
+	return rendered, raw, importPath, nil
+}
 
-	return nil
+func buildPagerLabel(result godoc.Result, importPath, sel string) string {
+	label := strings.TrimSpace(importPath)
+
+	switch v := result.(type) {
+	case godoc.PackageDoc:
+		if v.ImportPath != "" {
+			label = v.ImportPath
+		} else if v.Name != "" {
+			label = v.Name
+		}
+	case godoc.SymbolDoc:
+		label = v.ImportPath
+		symbolName := v.Name
+		if v.Kind == "method" {
+			recv := v.ReceiverType
+			if recv == "" {
+				recv = v.Receiver
+			}
+			if recv != "" && symbolName != "" {
+				symbolName = fmt.Sprintf("%s.%s", recv, symbolName)
+			}
+		}
+		if symbolName == "" {
+			symbolName = sel
+		}
+		if symbolName != "" {
+			if label != "" {
+				label = fmt.Sprintf("%s · %s", label, symbolName)
+			} else {
+				label = symbolName
+			}
+		}
+	}
+
+	if label == "" {
+		label = sel
+	}
+	if label == "" {
+		label = "Documentation"
+	}
+
+	return label
 }
