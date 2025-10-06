@@ -2,7 +2,7 @@
 
 A suite of tools for exploring Go API documentation.
 
-<img src="https://github.com/user-attachments/assets/3a7a614d-c427-4833-b77c-1a6ff54a8393" href="#" height="480">
+<img src="https://github.com/user-attachments/assets/57337c20-b523-4088-a5a5-a595ff5b133a" href="#" height="480">
 
 It ships with:
 
