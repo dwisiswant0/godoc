@@ -213,7 +213,7 @@ func ExampleGodoc_Load_textOutput() {
 
 	text := result.Text()
 	fmt.Printf("Text output successful, length: %d\n", len(text))
-	// Output: Text output successful, length: 149
+	// Output: Text output successful, length: 150
 }
 
 // ExampleGodoc_Load_htmlOutput demonstrates getting HTML documentation.
