@@ -4,12 +4,12 @@ import (
 	"regexp"
 	"sync"
 
-	"github.com/maypok86/otter/v2"
+	"go.dw1.io/fastcache"
 )
 
 var (
 	cacheOnce       sync.Once
-	globalCache     *otter.Cache[string, cacheEntry]
+	globalCache     *fastcache.Cache[string, cacheEntry]
 	cacheFilePath   string
 	cachePersistent bool
 	cacheMu         sync.Mutex

@@ -109,7 +109,7 @@ func TestPersistentCacheHitSkipsLoad(t *testing.T) {
 		t.Fatalf("failed to access cache after initial load: %v", err)
 	}
 
-	entry1, ok := cache1.GetIfPresent(pkgKey)
+	entry1, ok := getValidCacheEntry(cache1, pkgKey)
 	if !ok || entry1.Package == nil {
 		t.Fatalf("expected entry after initial load")
 	}
@@ -127,7 +127,7 @@ func TestPersistentCacheHitSkipsLoad(t *testing.T) {
 		t.Fatalf("failed to reload cache: %v", err)
 	}
 
-	entry, ok := cache.GetIfPresent(pkgKey)
+	entry, ok := getValidCacheEntry(cache, pkgKey)
 	if !ok || entry.Package == nil {
 		t.Fatalf("expected cache entry for fmt, found: %v", entry.Package)
 	}
@@ -505,7 +505,7 @@ func TestGetOrLoadPkgAddsActualVersionKey(t *testing.T) {
 	}
 
 	versionKey := getCacheKey("fmt", "latest", "")
-	if _, ok := cache.GetIfPresent(versionKey); ok {
+	if _, ok := getValidCacheEntry(cache, versionKey); ok {
 		t.Fatalf("expected version-specific key to be absent before load")
 	}
 
@@ -513,7 +513,7 @@ func TestGetOrLoadPkgAddsActualVersionKey(t *testing.T) {
 		t.Fatalf("unexpected load error: %v", err)
 	}
 
-	if _, ok := cache.GetIfPresent(versionKey); !ok {
+	if _, ok := getValidCacheEntry(cache, versionKey); !ok {
 		t.Fatalf("expected cache entry for actual version key")
 	}
 }
@@ -531,7 +531,7 @@ func TestGetOrLoadSymbolAddsActualVersionKey(t *testing.T) {
 	}
 
 	symbolKey := getCacheKey("fmt", "release", "Printf")
-	if _, ok := cache.GetIfPresent(symbolKey); ok {
+	if _, ok := getValidCacheEntry(cache, symbolKey); ok {
 		t.Fatalf("expected versioned symbol key absent before load")
 	}
 
@@ -539,7 +539,7 @@ func TestGetOrLoadSymbolAddsActualVersionKey(t *testing.T) {
 		t.Fatalf("unexpected symbol load error: %v", err)
 	}
 
-	if _, ok := cache.GetIfPresent(symbolKey); !ok {
+	if _, ok := getValidCacheEntry(cache, symbolKey); !ok {
 		t.Fatalf("expected cache entry for versioned symbol key")
 	}
 }
