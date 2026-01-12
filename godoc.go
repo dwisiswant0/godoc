@@ -105,7 +105,7 @@ func (d *Godoc) getOrLoadPkg(importPath, version string) (PackageDoc, string, er
 	expected := getPkgVersion(importPath, version)
 	key := getCacheKey(importPath, expected, "")
 
-	if entry, ok := cache.GetIfPresent(key); ok {
+	if entry, ok := getValidCacheEntry(cache, key); ok {
 		if entry.Package != nil {
 			if isRemoteImportPath(importPath) {
 				return *entry.Package, entry.Package.ImportPath, nil
@@ -155,7 +155,7 @@ func (d *Godoc) getOrLoadSymbol(importPath, sel, version string) (SymbolDoc, str
 	expected := getPkgVersion(importPath, version)
 	key := getCacheKey(importPath, expected, sel)
 
-	if entry, ok := cache.GetIfPresent(key); ok {
+	if entry, ok := getValidCacheEntry(cache, key); ok {
 		if entry.Symbol != nil {
 			if isRemoteImportPath(importPath) {
 				return *entry.Symbol, entry.Symbol.ImportPath, nil

@@ -9,11 +9,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
-	"github.com/maypok86/otter/v2"
-	"github.com/maypok86/otter/v2/stats"
+	"go.dw1.io/fastcache"
 	"golang.org/x/tools/go/packages"
+)
+
+const (
+	cacheMaxEntries = 10_000
 )
 
 // cacheMetadata holds metadata about the cached entry.
@@ -30,7 +32,7 @@ type cacheEntry struct {
 }
 
 // getCache initializes and returns the global cache instance.
-func getCache() (*otter.Cache[string, cacheEntry], error) {
+func getCache() (*fastcache.Cache[string, cacheEntry], error) {
 	var cacheInitErr error
 
 	cacheOnce.Do(func() {
@@ -50,17 +52,14 @@ func getCache() (*otter.Cache[string, cacheEntry], error) {
 		cacheFilePath = filepath.Join(dir, "cache.gob")
 		cachePersistent = true
 
-		cache := otter.Must(&otter.Options[string, cacheEntry]{
-			MaximumSize:      10_000,
-			ExpiryCalculator: otter.ExpiryWriting[string, cacheEntry](24 * time.Hour),
-			StatsRecorder:    stats.NewCounter(),
-		})
-
-		if err := loadCacheFromFile(cache, cacheFilePath); err != nil {
+		cache, err := loadCacheFromFile(cacheFilePath, cacheMaxEntries)
+		if err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {
 				cachePersistent = false
 				cacheFilePath = ""
 			}
+
+			cache = fastcache.New[string, cacheEntry](cacheMaxEntries)
 		}
 
 		globalCache = cache
@@ -93,7 +92,16 @@ func getCacheKey(importPath, version, sel string) string {
 	return fmt.Sprintf("%x", hash.Sum64())
 }
 
-func setCacheEntry(cache *otter.Cache[string, cacheEntry], entry cacheEntry, keys ...string) error {
+func getValidCacheEntry(cache *fastcache.Cache[string, cacheEntry], key string) (cacheEntry, bool) {
+	if cache == nil || key == "" {
+		return cacheEntry{}, false
+	}
+
+	entry, ok := cache.Get(key)
+	return entry, ok
+}
+
+func setCacheEntry(cache *fastcache.Cache[string, cacheEntry], entry cacheEntry, keys ...string) error {
 	for _, key := range keys {
 		if key == "" {
 			continue
@@ -109,7 +117,10 @@ func setCacheEntry(cache *otter.Cache[string, cacheEntry], entry cacheEntry, key
 	cacheMu.Lock()
 	defer cacheMu.Unlock()
 
-	if err := otter.SaveCacheToFile(cache, cacheFilePath); err != nil {
+	if err := cache.SaveToFile(cacheFilePath); err != nil {
+		if errors.Is(err, fs.ErrPermission) || os.IsPermission(err) || strings.Contains(strings.ToLower(err.Error()), "permission denied") {
+			return fmt.Errorf("cache persistence permission error: %w", fs.ErrPermission)
+		}
 		return err
 	}
 
@@ -164,12 +175,21 @@ func deriveCacheMetadata(module *packages.Module, resolvedVersion string) cacheM
 	return meta
 }
 
-func loadCacheFromFile(cache *otter.Cache[string, cacheEntry], path string) (err error) {
+func loadCacheFromFile(path string, maxEntries int) (_ *fastcache.Cache[string, cacheEntry], err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("load cache panic: %v", r)
 		}
 	}()
 
-	return otter.LoadCacheFromFile(cache, path)
+	cache, err := fastcache.LoadFromFile[string, cacheEntry](path)
+	if err != nil {
+		return nil, err
+	}
+
+	if cache == nil {
+		cache = fastcache.New[string, cacheEntry](maxEntries)
+	}
+
+	return cache, nil
 }

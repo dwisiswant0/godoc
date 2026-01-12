@@ -8,10 +8,8 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
-	"time"
 
-	"github.com/maypok86/otter/v2"
-	"github.com/maypok86/otter/v2/stats"
+	"go.dw1.io/fastcache"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -110,11 +108,7 @@ func TestSetCacheEntryHandlesSaveError(t *testing.T) {
 	}
 	cacheFilePath = filepath.Join(roDir, "cache.gob")
 
-	cache := otter.Must(&otter.Options[string, cacheEntry]{
-		MaximumSize:      10,
-		ExpiryCalculator: otter.ExpiryWriting[string, cacheEntry](time.Hour),
-		StatsRecorder:    stats.NewCounter(),
-	})
+	cache := fastcache.New[string, cacheEntry](10)
 
 	entry := cacheEntry{cacheMetadata: cacheMetadata{GoVersion: runtime.Version()}}
 	err := setCacheEntry(cache, entry, "alpha")
@@ -126,7 +120,7 @@ func TestSetCacheEntryHandlesSaveError(t *testing.T) {
 		t.Fatalf("expected permission error, got %v", err)
 	}
 
-	if _, ok := cache.GetIfPresent("alpha"); !ok {
+	if _, ok := cache.Get("alpha"); !ok {
 		t.Fatalf("expected cache entry to be set despite save error")
 	}
 }
@@ -138,11 +132,7 @@ func TestSetCacheEntrySuccess(t *testing.T) {
 	cachePersistent = true
 	cacheFilePath = filepath.Join(t.TempDir(), "cache.gob")
 
-	cache := otter.Must(&otter.Options[string, cacheEntry]{
-		MaximumSize:      5,
-		ExpiryCalculator: otter.ExpiryWriting[string, cacheEntry](time.Hour),
-		StatsRecorder:    stats.NewCounter(),
-	})
+	cache := fastcache.New[string, cacheEntry](5)
 
 	entry := cacheEntry{cacheMetadata: cacheMetadata{GoVersion: runtime.Version()}}
 	if err := setCacheEntry(cache, entry, "alpha", "beta"); err != nil {
@@ -161,11 +151,7 @@ func TestSetCacheEntrySkipsPersistenceWhenDisabled(t *testing.T) {
 	cachePersistent = false
 	cacheFilePath = filepath.Join(t.TempDir(), "cache.gob")
 
-	cache := otter.Must(&otter.Options[string, cacheEntry]{
-		MaximumSize:      5,
-		ExpiryCalculator: otter.ExpiryWriting[string, cacheEntry](time.Hour),
-		StatsRecorder:    stats.NewCounter(),
-	})
+	cache := fastcache.New[string, cacheEntry](5)
 
 	entry := cacheEntry{cacheMetadata: cacheMetadata{GoVersion: runtime.Version()}}
 	if err := setCacheEntry(cache, entry, "alpha"); err != nil {
