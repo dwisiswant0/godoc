@@ -140,6 +140,26 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setSize(msg.Width, msg.Height)
 
 	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+
+		if m.isSearching && !m.navigationMode {
+			var cmd tea.Cmd
+			switch msg.String() {
+			case "esc":
+				m.setShowSearch(false)
+				m.setSize(m.width, m.height)
+				return m, nil
+			case "enter":
+				return m, m.handleNavigationActivation()
+			}
+
+			m.textarea, cmd = m.textarea.Update(msg)
+			m.highlightMatches()
+			return m, cmd
+		}
+
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
