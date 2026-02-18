@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/atotto/clipboard"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -16,6 +17,7 @@ import (
 
 const (
 	statusBarHeight = 1
+	searchBoxHeight = 1
 	helpBoxPadding  = 2
 	statusMsgDur    = 3 * time.Second
 	logoText        = " godoc-cli "
@@ -48,6 +50,9 @@ var (
 	helpTitleStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#1c8760", Dark: "#6fe7b3"}).
 			Bold(true)
+
+	selectedResultStyle = lipgloss.NewStyle().Background(lipgloss.Color("#00FF00"))
+	resultStyle         = lipgloss.NewStyle().Background(lipgloss.Color("#FF00FF"))
 )
 
 var helpEntries = []struct {
@@ -84,14 +89,24 @@ func Run(doc Document) error {
 
 type statusMsgTimeoutMsg struct{}
 
+type searchResult struct {
+	Line  int
+	Index int
+}
+
 type model struct {
-	viewport      viewport.Model
-	ready         bool
-	width         int
-	height        int
-	doc           Document
-	showHelp      bool
-	statusMessage string
+	viewport           viewport.Model
+	textarea           textarea.Model
+	ready              bool
+	width              int
+	height             int
+	doc                Document
+	showHelp           bool
+	statusMessage      string
+	isSearching        bool
+	searchResults      []searchResult
+	currentResultIndex int
+	navigationMode     bool
 }
 
 func newModel(doc Document) *model {
@@ -99,9 +114,14 @@ func newModel(doc Document) *model {
 	vp.SetContent(doc.Content)
 	vp.MouseWheelEnabled = true
 
+	ta := textarea.New()
+	ta.ShowLineNumbers = false
+	ta.Prompt = "/"
+
 	return &model{
 		viewport: vp,
 		doc:      doc,
+		textarea: ta,
 	}
 }
 
@@ -127,8 +147,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.showHelp {
 				m.showHelp = false
 				m.setSize(m.width, m.height)
-
 				return m, nil
+			}
+
+			if m.navigationMode {
+				return m, m.handleDeactivations()
 			}
 
 			return m, tea.Quit
@@ -160,6 +183,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.GotoTop()
 		case "G", "end":
 			m.viewport.GotoBottom()
+		case "/":
+			if m.navigationMode {
+				m.handleDeactivations()
+				return m, nil
+			}
+			m.setSize(m.width, m.height) // force layout recalculation
+			return m, m.handleSearchActivation(msg)
+		case "enter":
+			return m, m.handleNavigationActivation()
+		case "n":
+			return m, m.handleNavigationForward(msg)
+		case "N":
+			return m, m.handleNavigationBackwards(msg)
 		}
 
 	case statusMsgTimeoutMsg:
@@ -167,6 +203,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
+
+	if m.isSearching {
+		cmd = m.updateTextArea(msg)
+		m.highlightMatches()
+	}
 
 	m.viewport, cmd = m.viewport.Update(msg)
 	if cmd != nil {
@@ -184,6 +225,11 @@ func (m *model) View() string {
 	var b strings.Builder
 
 	b.WriteString(m.viewport.View())
+	if m.isSearching {
+		b.WriteRune('\n')
+		b.WriteString(m.textarea.View())
+	}
+
 	b.WriteRune('\n')
 	b.WriteString(m.statusBar())
 	if m.showHelp {
@@ -252,12 +298,206 @@ func (m *model) helpView() string {
 	return helpStyle.Width(maxInt(m.viewport.Width, lipgloss.Width(content))).Render(content)
 }
 
+func (m *model) updateTextArea(msg tea.Msg) tea.Cmd {
+	var cmd tea.Cmd
+	m.textarea, cmd = m.textarea.Update(msg)
+	return cmd
+}
+
+func (m *model) highlightMatches() {
+	searchQuery := m.textarea.Value()
+	if searchQuery == "" {
+		return
+	}
+
+	m.resetSearchResults()
+	m.findAndHighlightMatches(searchQuery)
+}
+
+func (m *model) resetSearchResults() {
+	m.searchResults = []searchResult{}
+}
+
+func (m *model) findAndHighlightMatches(searchQuery string) {
+	lines := strings.Split(m.doc.Content, "\n")
+	var processedLines []string
+	for i, line := range lines {
+		processedLines = append(processedLines, m.processLineForCaseInsensitiveMatches(i, line, searchQuery))
+	}
+	m.viewport.SetContent(strings.Join(processedLines, "\n"))
+}
+
+func (m *model) processLineForCaseInsensitiveMatches(lineIndex int, line, searchQuery string) string {
+	var highlightedLine string
+	var startPos int
+
+	lowercaseline := strings.ToLower(line)
+	lowercasesearchQuery := strings.ToLower(searchQuery)
+
+	for {
+		index := strings.Index(lowercaseline[startPos:], lowercasesearchQuery)
+		if index < 0 {
+			highlightedLine += line[startPos:]
+			break
+		}
+
+		m.storeSearchResult(lineIndex, startPos+index)
+		highlightedLine += m.highlightMatch(lineIndex, startPos, index, lowercasesearchQuery, line)
+		startPos += index + len(lowercasesearchQuery)
+	}
+
+	return highlightedLine
+}
+
+func (m *model) highlightMatch(lineIndex, startPos, index int, searchQuery, line string) string {
+	styleToUse := m.setHighlightStyle(lineIndex, startPos+index)
+	matchedPart := line[startPos+index : startPos+index+len(searchQuery)]
+	return line[startPos:startPos+index] + styleToUse.Render(matchedPart)
+}
+
+func (m *model) storeSearchResult(line, index int) {
+	m.searchResults = append(m.searchResults, searchResult{Line: line, Index: index})
+}
+
+func (m *model) setHighlightStyle(lineIndex, index int) lipgloss.Style {
+	if m.currentResultIndex >= 0 && m.currentResultIndex < len(m.searchResults) {
+		if lineIndex == m.searchResults[m.currentResultIndex].Line && index == m.searchResults[m.currentResultIndex].Index {
+			return selectedResultStyle
+		}
+	}
+	return resultStyle
+}
+
+func (m *model) setShowSearch(v bool) {
+	m.isSearching = v
+	if v {
+		m.textarea.Focus()
+	}
+	m.setSize(m.width, m.height)
+}
+
+func (m *model) handleDeactivations() tea.Cmd {
+	if m.navigationMode {
+		m.navigationMode = false
+		m.textarea.Focus()
+		return nil
+	}
+	if m.isSearching {
+		m.setShowSearch(false)
+		m.setSize(m.width, m.height)
+		return nil
+	}
+	return nil
+}
+
+func (m *model) hasSearchResults() bool {
+	return len(m.searchResults) > 0
+}
+
+func (m *model) incrementSearchIndex() {
+	m.currentResultIndex = (m.currentResultIndex + 1) % len(m.searchResults)
+}
+
+func (m *model) decrementSearchIndex() {
+	m.currentResultIndex = m.currentResultIndex - 1
+	if m.currentResultIndex < 0 {
+		m.currentResultIndex = len(m.searchResults) - 1
+	}
+}
+
+func (m *model) scrollViewportToLine(line int) {
+	// Check if the resultLine is currently visible
+	topLine := m.viewport.YOffset
+	bottomLine := topLine + m.viewport.Height - 1 // -1 because it's zero-based index
+	for line < topLine || line > bottomLine {
+		if line < topLine {
+			m.viewport.ViewUp()
+		} else {
+			m.viewport.ViewDown()
+		}
+		// Update topLine and bottomLine after scrolling
+		topLine = m.viewport.YOffset
+		bottomLine = topLine + m.viewport.Height - 1
+	}
+}
+
+func (m *model) scrollToCurrentResult() {
+	nextResult := m.searchResults[m.currentResultIndex]
+	m.scrollViewportToLine(nextResult.Line)
+}
+
+func (m *model) navigateToNextResult() {
+	if !m.hasSearchResults() {
+		return
+	}
+	m.incrementSearchIndex()
+	m.scrollToCurrentResult()
+	m.highlightMatches()
+}
+
+func (m *model) navigateToPreviousResult() {
+	if !m.hasSearchResults() {
+		return
+	}
+	m.decrementSearchIndex()
+	m.scrollToCurrentResult()
+	m.highlightMatches()
+}
+
+func (m *model) handleNavigationForward(msg tea.Msg) tea.Cmd {
+	if m.navigationMode {
+		m.navigateToNextResult()
+		return m.updateViewPort(msg)
+	}
+	return m.updateTextArea(msg)
+}
+
+func (m *model) handleNavigationBackwards(msg tea.Msg) tea.Cmd {
+	if m.navigationMode {
+		m.navigateToPreviousResult()
+		return m.updateViewPort(msg)
+	}
+	return m.updateTextArea(msg)
+}
+
+func (m *model) handleNavigationActivation() tea.Cmd {
+	if m.isSearching {
+		m.textarea.Blur()
+		m.navigationMode = true
+		return nil
+	}
+	return nil
+}
+
+func (m *model) handleSearchActivation(msg tea.Msg) tea.Cmd {
+	if m.isSearching {
+		return m.updateTextArea(msg)
+	}
+	if !m.isSearching {
+		m.setShowSearch(true)
+		return nil
+	}
+	return nil
+}
+
+func (m *model) updateViewPort(msg tea.Msg) tea.Cmd {
+	var cmd tea.Cmd
+	m.viewport, cmd = m.viewport.Update(msg)
+	return cmd
+}
+
 func (m *model) setSize(width, height int) {
 	m.viewport.Width = width
 
 	contentHeight := height - statusBarHeight
 	if m.showHelp {
 		contentHeight -= m.helpHeight()
+	}
+
+	if m.isSearching {
+		contentHeight -= searchBoxHeight
+		m.textarea.SetWidth(width)
+		m.textarea.SetHeight(searchBoxHeight)
 	}
 
 	if contentHeight < 1 {
