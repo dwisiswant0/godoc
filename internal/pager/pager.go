@@ -156,7 +156,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			m.textarea, cmd = m.textarea.Update(msg)
-			m.highlightMatches()
 			return m, cmd
 		}
 
@@ -171,7 +170,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if m.navigationMode {
-				return m, m.handleDeactivations()
+				m.handleDeactivations()
+				return m, nil
 			}
 
 			return m, tea.Quit
@@ -204,6 +204,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "G", "end":
 			m.viewport.GotoBottom()
 		case "/":
+			m.resetSearchResults()
+			m.textarea.Reset()
 			if m.navigationMode {
 				m.handleDeactivations()
 				return m, nil
@@ -396,18 +398,16 @@ func (m *model) setShowSearch(v bool) {
 	m.setSize(m.width, m.height)
 }
 
-func (m *model) handleDeactivations() tea.Cmd {
+func (m *model) handleDeactivations() {
 	if m.navigationMode {
 		m.navigationMode = false
 		m.textarea.Focus()
-		return nil
 	}
 	if m.isSearching {
 		m.setShowSearch(false)
+		m.viewport.SetContent(m.doc.Content)
 		m.setSize(m.width, m.height)
-		return nil
 	}
-	return nil
 }
 
 func (m *model) hasSearchResults() bool {
