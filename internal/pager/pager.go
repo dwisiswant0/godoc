@@ -16,11 +16,12 @@ import (
 )
 
 const (
-	statusBarHeight = 1
-	searchBoxHeight = 1
-	helpBoxPadding  = 2
-	statusMsgDur    = 3 * time.Second
-	logoText        = " godoc-cli "
+	statusBarHeight   = 1
+	searchBoxHeight   = 1
+	helpBoxPadding    = 2
+	statusMsgDur      = 3 * time.Second
+	searchDebounceDur = 100 * time.Millisecond
+	logoText          = " godoc-cli "
 )
 
 var (
@@ -95,6 +96,8 @@ type searchResult struct {
 	Index int
 }
 
+type searchMsg string
+
 type model struct {
 	viewport           viewport.Model
 	textarea           textarea.Model
@@ -140,6 +143,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.setSize(msg.Width, msg.Height)
 
+	case searchMsg:
+		if m.textarea.Value() == string(msg) {
+			m.highlightMatches()
+			m.navigateToNextResult()
+			return m, nil
+		}
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
@@ -149,7 +158,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			switch msg.String() {
 			case "esc":
-				m.setShowSearch(false)
+				m.handleDeactivations()
 				m.setSize(m.width, m.height)
 				return m, nil
 			case "enter":
@@ -157,7 +166,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			m.textarea, cmd = m.textarea.Update(msg)
-			return m, cmd
+			currentValue := m.textarea.Value()
+			return m, tea.Batch(cmd, func() tea.Msg {
+				time.Sleep(searchDebounceDur)
+				return searchMsg(currentValue)
+			})
 		}
 
 		switch msg.String() {
