@@ -53,6 +53,7 @@ var (
 
 	selectedResultStyle = lipgloss.NewStyle().Background(lipgloss.Color("#00FF00"))
 	resultStyle         = lipgloss.NewStyle().Background(lipgloss.Color("#FF00FF"))
+	noResultsStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#b22222"))
 )
 
 var helpEntries = []struct {
@@ -228,6 +229,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.isSearching {
 		cmd = m.updateTextArea(msg)
+		m.setSize(m.width, m.height)
 		m.highlightMatches()
 	}
 
@@ -244,22 +246,40 @@ func (m *model) View() string {
 		return "Loading pager…"
 	}
 
-	var b strings.Builder
+	top := m.viewport.View()
 
-	b.WriteString(m.viewport.View())
+	searchRow := ""
 	if m.isSearching {
-		b.WriteRune('\n')
-		b.WriteString(m.textarea.View())
+		counter := fmt.Sprintf("%d/%d", m.currentResultIndex+1, len(m.searchResults))
+		if !m.hasSearchResults() {
+			counter = noResultsStyle.Render("0/0")
+		}
+		counterStyled := lipgloss.NewStyle().
+			Align(lipgloss.Right).
+			Render(counter)
+
+		searchRow = lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			m.textarea.View(),
+			counterStyled,
+		)
 	}
 
-	b.WriteRune('\n')
-	b.WriteString(m.statusBar())
+	bottom := m.statusBar()
 	if m.showHelp {
-		b.WriteString("\n")
-		b.WriteString(m.helpView())
+		bottom = lipgloss.JoinVertical(
+			lipgloss.Left,
+			bottom,
+			m.helpView(),
+		)
 	}
 
-	return b.String()
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		top,
+		searchRow,
+		bottom,
+	)
 }
 
 func (m *model) statusBar() string {
@@ -453,6 +473,7 @@ func (m *model) navigateToNextResult() {
 	m.incrementSearchIndex()
 	m.scrollToCurrentResult()
 	m.highlightMatches()
+	m.setSize(m.width, m.height)
 }
 
 func (m *model) navigateToPreviousResult() {
@@ -462,6 +483,7 @@ func (m *model) navigateToPreviousResult() {
 	m.decrementSearchIndex()
 	m.scrollToCurrentResult()
 	m.highlightMatches()
+	m.setSize(m.width, m.height)
 }
 
 func (m *model) handleNavigationForward(msg tea.Msg) tea.Cmd {
@@ -506,6 +528,14 @@ func (m *model) updateViewPort(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
+func (m *model) searchCounter() string {
+	counter := fmt.Sprintf("%d/%d", m.currentResultIndex+1, len(m.searchResults))
+	if !m.hasSearchResults() {
+		return " 0!"
+	}
+	return counter
+}
+
 func (m *model) setSize(width, height int) {
 	m.viewport.Width = width
 
@@ -515,8 +545,11 @@ func (m *model) setSize(width, height int) {
 	}
 
 	if m.isSearching {
+		counter := m.searchCounter()
 		contentHeight -= searchBoxHeight
-		m.textarea.SetWidth(width)
+		counterWidth := lipgloss.Width(counter)
+		textareaWidth := width - counterWidth - 1
+		m.textarea.SetWidth(textareaWidth)
 		m.textarea.SetHeight(searchBoxHeight)
 	}
 
