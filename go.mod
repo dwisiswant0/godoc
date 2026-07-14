@@ -11,9 +11,9 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.5.0
 	github.com/muesli/termenv v0.16.0
 	go.dw1.io/fastcache v0.3.0
-	golang.org/x/mod v0.33.0
-	golang.org/x/term v0.40.0
-	golang.org/x/tools v0.42.0
+	golang.org/x/mod v0.35.0
+	golang.org/x/term v0.43.0
+	golang.org/x/tools v0.44.0
 )
 
 require (
@@ -47,9 +47,9 @@ require (
 	github.com/yuin/goldmark v1.7.8 // indirect
 	github.com/yuin/goldmark-emoji v1.0.5 // indirect
 	go.dw1.io/rapidhash v0.3.0 // indirect
-	golang.org/x/net v0.50.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 )
