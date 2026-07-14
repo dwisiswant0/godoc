@@ -616,7 +616,12 @@ func renderMarkdown(result godoc.Result, cfg config) (string, string, string, er
 
 	switch cfg.style {
 	case "auto":
-		renderOpts = append(renderOpts, glamour.WithAutoStyle())
+		_, exists := os.LookupEnv("GLAMOUR_STYLE")
+		if exists {
+			renderOpts = append(renderOpts, glamour.WithEnvironmentConfig())
+		} else {
+			renderOpts = append(renderOpts, glamour.WithAutoStyle())
+		}
 	default:
 		renderOpts = append(renderOpts, glamour.WithStandardStyle(cfg.style))
 	}
